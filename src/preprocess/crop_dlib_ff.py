@@ -22,7 +22,7 @@ def facecrop(org_path,save_path,face_detector,face_predictor,period=1,num_frames
     frame_count_org = int(cap_org.get(cv2.CAP_PROP_FRAME_COUNT))
 
     
-    frame_idxs = np.linspace(0, frame_count_org - 1, num_frames, endpoint=True, dtype=np.int)
+    frame_idxs = np.linspace(0, frame_count_org - 1, num_frames, endpoint=True, dtype=int)
     for cnt_frame in range(frame_count_org): 
         ret_org, frame_org = cap_org.read()
         height,width=frame_org.shape[:-1]

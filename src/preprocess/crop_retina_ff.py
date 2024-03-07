@@ -19,7 +19,7 @@ def facecrop(model,org_path,save_path,period=1,num_frames=10):
 	croppedfaces=[]
 	frame_count_org = int(cap_org.get(cv2.CAP_PROP_FRAME_COUNT))
 	
-	frame_idxs = np.linspace(0, frame_count_org - 1, num_frames, endpoint=True, dtype=np.int)
+	frame_idxs = np.linspace(0, frame_count_org - 1, num_frames, endpoint=True, dtype=int)
 	
 	for cnt_frame in range(frame_count_org): 
 		ret_org, frame_org = cap_org.read()
@@ -76,15 +76,15 @@ def facecrop(model,org_path,save_path,period=1,num_frames=10):
 if __name__=='__main__':
 	parser=argparse.ArgumentParser()
 	parser.add_argument('-d',dest='dataset',choices=['DeepFakeDetection_original','DeepFakeDetection','FaceShifter','Face2Face','Deepfakes','FaceSwap','NeuralTextures','Original','Celeb-real','Celeb-synthesis','YouTube-real','DFDC','DFDCP'])
-	parser.add_argument('-c',dest='comp',choices=['raw','c23','c40'],default='raw')
+	parser.add_argument('-c',dest='comp',choices=['raw','c23','c40'],default='c23')
 	parser.add_argument('-n',dest='num_frames',type=int,default=32)
 	args=parser.parse_args()
 	if args.dataset=='Original':
-		dataset_path='data/FaceForensics++/original_sequences/youtube/{}/'.format(args.comp)
+		dataset_path='data/FaceForensics/original_sequences/youtube/{}/'.format(args.comp)
 	elif args.dataset=='DeepFakeDetection_original':
-		dataset_path='data/FaceForensics++/original_sequences/actors/{}/'.format(args.comp)
+		dataset_path='data/FaceForensics/original_sequences/actors/{}/'.format(args.comp)
 	elif args.dataset in ['DeepFakeDetection','FaceShifter','Face2Face','Deepfakes','FaceSwap','NeuralTextures']:
-		dataset_path='data/FaceForensics++/manipulated_sequences/{}/{}/'.format(args.dataset,args.comp)
+		dataset_path='data/FaceForensics/manipulated_sequences/{}/{}/'.format(args.dataset,args.comp)
 	elif args.dataset in ['Celeb-real','Celeb-synthesis','YouTube-real']:
 		dataset_path='data/Celeb-DF-v2/{}/'.format(args.dataset)
 	elif args.dataset in ['DFDC','DFDCVal']:
