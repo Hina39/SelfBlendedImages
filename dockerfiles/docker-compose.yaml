@@ -18,5 +18,5 @@ services:
     shm_size: "16gb"
     tty: true
     volumes:
-        - /home/hina/research/SelfBlendedImages-1/:/app/
+        - ../:/app/
         - /media/hina/ssd/hina/FaceForensics/:/app/data/FaceForensics/
