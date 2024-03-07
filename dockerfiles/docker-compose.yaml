@@ -14,7 +14,7 @@ services:
               capabilities: [gpu]
     build:
       context: ../../
-      dockerfile: SelfBlendedImages-1/dockerfiles/Dockerfile
+      dockerfile: dockerfiles/Dockerfile
     shm_size: "16gb"
     tty: true
     volumes:
