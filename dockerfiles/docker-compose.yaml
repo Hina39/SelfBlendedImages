@@ -1,0 +1,22 @@
+version: "3.8"
+
+name: sbis
+services:
+  core:
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["0"]
+              capabilities: [gpu]
+    build:
+      context: ../../
+      dockerfile: SelfBlendedImages-1/dockerfiles/Dockerfile
+    shm_size: "16gb"
+    tty: true
+    volumes:
+        - /home/hina/research/SelfBlendedImages-1/:/app/
+        - /media/hina/ssd/hina/FaceForensics/:/app/data/FaceForensics/
