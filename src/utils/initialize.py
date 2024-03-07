@@ -10,7 +10,7 @@ import pandas as pd
 
 
 def init_ff(phase,level='frame',n_frames=8):
-	dataset_path='data/FaceForensics++/original_sequences/youtube/raw/frames/'
+	dataset_path='data/FaceForensics/original_sequences/youtube/c23/frames/'
 	
 
 	image_list=[]
@@ -20,7 +20,7 @@ def init_ff(phase,level='frame',n_frames=8):
 	
 	folder_list = sorted(glob(dataset_path+'*'))
 	filelist = []
-	list_dict = json.load(open(f'data/FaceForensics++/{phase}.json','r'))
+	list_dict = json.load(open(f'data/FaceForensics/{phase}.json','r'))
 	for i in list_dict:
 		filelist+=i
 	folder_list = [i for i in folder_list if os.path.basename(i)[:3] in filelist]

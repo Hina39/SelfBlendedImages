@@ -79,9 +79,9 @@ def main(args):
 
     now=datetime.now()
     save_path='output/{}_'.format(args.session_name)+now.strftime(os.path.splitext(os.path.basename(args.config))[0])+'_'+now.strftime("%m_%d_%H_%M_%S")+'/'
-    os.mkdir(save_path)
-    os.mkdir(save_path+'weights/')
-    os.mkdir(save_path+'logs/')
+    os.makedirs(save_path,exist_ok=True)
+    os.makedirs(save_path+'weights/',exist_ok=True)
+    os.makedirs(save_path+'logs/',exist_ok=True)
     logger = log(path=save_path+"logs/", file="losses.logs")
 
     criterion=nn.CrossEntropyLoss()
@@ -99,6 +99,7 @@ def main(args):
         for step,data in enumerate(tqdm(train_loader)):
             img=data['img'].to(device, non_blocking=True).float()
             target=data['label'].to(device, non_blocking=True).long()
+            print(img.shape)
             output=model.training_step(img, target)
             loss=criterion(output,target)
             loss_value=loss.item()
