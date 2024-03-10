@@ -104,9 +104,11 @@ def main(
             with torch.no_grad():
                 img = torch.tensor(face_list).to(device).float() / 255
                 if model.__class__.__name__ == "Detector":
+                    # Detectorクラスではlogitsは[Real, Fake]の順です.
                     pred = model(img).softmax(1)[:, 1]
                 elif model.__class__.__name__ == "Classifier":
-                    pred = model(img).logits.softmax(1)[:, 1]
+                    # Classifierクラスではlogitsは[Fake, Real]の順です.
+                    pred = model(img).logits.softmax(1)[:, 0]
                 else:
                     raise NotImplementedError
 
