@@ -1,5 +1,4 @@
 import argparse
-import json
 import pathlib
 import random
 import warnings
@@ -41,32 +40,36 @@ class InferenceDataset(Dataset):
 
         """
         super().__init__()
-        # target_listをJSONファイルから読み込む.
-        target_list_path = dataset_root_path / "target_list.json"
-        with target_list_path.open("r") as f:
-            self.target_list = json.load(f)
+        # dataset_root_path直下のディレクトリをすべて取得.
+        # is_dirメソッドをつけないとファイルも取得してしまう.
+        all_dir_paths: List[pathlib.Path] = sorted(
+            [path for path in dataset_root_path.glob("*/") if path.is_dir()]
+        )
 
-        # no_face.txtをListに格納
+        # ディレクトリ名は最後にREAL/FAKEを表すラベルがついているので, その値から
+        # target_list を再構成する.
+        self.target_list: List[int] = [
+            int(str(path).split("_")[-1]) for path in all_dir_paths
+        ]
+
+        # 画像ファイルをListに格納.
+        self.face_paths: List[List[pathlib.Path]] = [
+            list(path.glob("*.png")) for path in all_dir_paths
+        ]
+
+        # no_face.txtをListに格納. この属性は無くても評価自体は可能.
         self.no_face_paths: List[pathlib.Path] = list(
             dataset_root_path.glob("*/no_face.txt")
         )
 
-        # dataset_root_path直下のディレクトリをすべて取得.
-        # is_dirメソッドをつけないとJSONファイルも取得してしまう.
-        all_dir_paths: List[pathlib.Path] = [
-            path for path in dataset_root_path.glob("*/") if path.is_dir()
-        ]
-        face_dir_paths: List[pathlib.Path] = list(
-            set(all_dir_paths) - set(path.parent for path in self.no_face_paths)
-        )
-
-        # 画像ファイルをListに格納
-        self.face_paths: List[List[pathlib.Path]] = [
-            list(path.glob("*.png")) for path in face_dir_paths
-        ]
-
     def __getitem__(self, index: int) -> Tuple[List[np.ndarray], List[int]]:
         """データセットからデータを取得する."""
+        # リストの長さが0の場合は顔検出に失敗しているので即座に例外を上げる.
+        if len(self.face_paths[index]) == 0:
+            raise ValueError(
+                f"No faces detected in the video `{self.face_paths[index]}`."
+            )
+
         face_list: List[np.ndarray] = []
         idx_list: List[int] = []
 
@@ -83,7 +86,7 @@ class InferenceDataset(Dataset):
 
     def __len__(self) -> int:
         """データセットの長さを返却する."""
-        assert len(self.face_paths) == len(self.target_list)
+        # assert len(self.face_paths) == len(self.target_list)
         return len(self.face_paths)
 
     @property
@@ -145,10 +148,9 @@ def main(
 
     # データセットを初期化.
     if dataset_name == "FFIW":
-        raise NotImplementedError
+        dataset_root_path = pathlib.Path("data/data/FFIW/inference")
     elif dataset_name == "FF":
         dataset_root_path = pathlib.Path("data/FaceForensics++/inference")
-        inference_dataset = InferenceDataset(dataset_root_path)
     elif dataset_name == "DFD":
         raise NotImplementedError
     elif dataset_name == "DFDC":
@@ -156,9 +158,11 @@ def main(
     elif dataset_name == "DFDCP":
         raise NotImplementedError
     elif dataset_name == "CDF":
-        raise NotImplementedError
+        dataset_root_path = pathlib.Path("data/Celeb-DF-v2/inference")
     else:
         NotImplementedError(f"dataset `{dataset_name}` is not supported.")
+
+    inference_dataset = InferenceDataset(dataset_root_path)
 
     output_list = []
     for face_list, idx_list in tqdm(inference_dataset, total=len(inference_dataset)):
@@ -186,6 +190,7 @@ def main(
                 for i in range(len(pred_res)):
                     pred_res[i] = max(pred_list[i])
                 pred = pred_res.mean()
+                print(pred)
         except Exception as e:
             print(e)
             pred = 0.5
@@ -193,7 +198,7 @@ def main(
         output_list.append(pred)
 
     # 顔が検出されなかった動画については0.5を追加
-    output_list.extend([0.5 for _ in range(inference_dataset.num_no_face)])
+    # output_list.extend([0.5 for _ in range(inference_dataset.num_no_face)])
 
     auc = roc_auc_score(inference_dataset.target_list, output_list)
     print(f"{dataset_name}| AUC: {auc:.4f}")
