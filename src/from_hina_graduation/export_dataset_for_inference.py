@@ -5,35 +5,34 @@
 `<通し番号>_<frame番号>.png`の形になっている. 同じフレーム内に顔が複数検出される
 ことがあるので通し番号をつけている.
 顔がすべてのフレームで検出されなかった場合はno_face.txtを保存する. 中身は空ファイル.
+ディレクトリ名の最後の数字は動画のラベル (REAL/FAKE) を表している.
 
 Celeb-DF-v2/
 │
 └── inference/
      │
-     ├── Celeb-synthesis_videos_id30_id3_0002/
+     ├── Celeb-synthesis_videos_id30_id3_0002_1/
      │    │
      │    ├── 0_0.png
      │    │
      │    ├── 1_10.png
      ...
-     └── target_list.json
 
 FaceForensics++
 │
 └── inference/
      │
-     ├── manipulated_sequences_NeuralTextures_c23_videos_995_233/
+     ├── manipulated_sequences_NeuralTextures_c23_videos_995_233_1/
      │    │
      │    ├── 0_0.png
      │    │
      │    ├── 1_9.png
      │    ...
      │
-     ├── manipulated_sequences_Deepfakes_c23_videos_024_073/
+     ├── manipulated_sequences_Deepfakes_c23_videos_024_073_1/
      │    │
      │    └── no_face.txt
      ...
-     └── target_list.json
 
 """
 
