@@ -51,8 +51,11 @@ class InferenceDataset(Dataset):
             dataset_root_path.glob("*/no_face.txt")
         )
 
-        # dataset_root_path直下のディレクトリをすべて取得
-        all_dir_paths: List[pathlib.Path] = list(dataset_root_path.glob("*/"))
+        # dataset_root_path直下のディレクトリをすべて取得.
+        # is_dirメソッドをつけないとJSONファイルも取得してしまう.
+        all_dir_paths: List[pathlib.Path] = [
+            path for path in dataset_root_path.glob("*/") if path.is_dir()
+        ]
         face_dir_paths: List[pathlib.Path] = list(
             set(all_dir_paths) - set(path.parent for path in self.no_face_paths)
         )
@@ -80,6 +83,7 @@ class InferenceDataset(Dataset):
 
     def __len__(self) -> int:
         """データセットの長さを返却する."""
+        assert len(self.face_paths) == len(self.target_list)
         return len(self.face_paths)
 
     @property
@@ -183,6 +187,7 @@ def main(
                     pred_res[i] = max(pred_list[i])
                 pred = pred_res.mean()
         except Exception as e:
+            print(e)
             pred = 0.5
 
         output_list.append(pred)
