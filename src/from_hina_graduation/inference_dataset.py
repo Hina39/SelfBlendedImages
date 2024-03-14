@@ -2,7 +2,7 @@ import argparse
 import pathlib
 import random
 import warnings
-from typing import List, Literal, Tuple
+from typing import Dict, List, Literal, Tuple
 
 import numpy as np
 import torch
@@ -11,7 +11,7 @@ from omegaconf import OmegaConf
 from PIL import Image
 from retinaface.pre_trained_models import get_model
 from sklearn.metrics import roc_auc_score
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, Subset
 from tqdm import tqdm
 
 from src.from_hina_graduation.classifier.base import Classifier
@@ -95,14 +95,15 @@ class InferenceDataset(Dataset):
         return len(self.no_face_paths)
 
 
-def main(
+def evaluate_performance(
     weight_path: pathlib.Path,
     model_name: Literal["efficientnet_b4"],
     dataset_name: Literal["FFIW", "FF", "DFD", "DFDC", "DFDCP", "CDF"],
+    subset_ratio: float = 1.0,
     hina_graduation_config_path: pathlib.Path = pathlib.Path(
         "src/from_hina_graduation/config"
     ),
-) -> None:
+) -> Dict[str, float]:
     """DeepFake検出器の性能を評価する. 性能はAUCの値で標準出力に出力される.
 
     Args:
@@ -110,10 +111,18 @@ def main(
             pthのみが許容される. ckptは事前にpth形式に変換する必要がある.
         model_name (Literal): 評価するDeepFake検出器のモデルの名前.
         dataset_name (Literal): 評価に使用するデータセットの名前.
+        subset_ratio (float): 評価に使用するデータの割合. 0.0~1.0の間の値.
+            値が極端に小さいとREALまたはFAKE一方のデータしかサンプリングされずに
+            AUCの計算でエラーになる可能性がある.
         hina_graduation_config_path (pathlib.Path): hina_graduationから
             移動してきたconfigが配置されているディレクトリのパス.
 
+    Return:
+        Dict[str, float]: DeepFake検出器の性能の定量値の辞書.
+
     """
+    assert 0.0 <= subset_ratio <= 1.0
+
     # DeepFake検出器（分類器）の重みを読み込む
     # .tarで終わる場合はSelfBlendedImagesのコードで学習した重みを読み込む
     if weight_path.suffix == ".tar":
@@ -162,7 +171,17 @@ def main(
     else:
         NotImplementedError(f"dataset `{dataset_name}` is not supported.")
 
-    inference_dataset = InferenceDataset(dataset_root_path)
+    _inference_dataset = InferenceDataset(dataset_root_path)
+
+    # データセットのサブセットを生成
+    subset_size = int(len(_inference_dataset) * subset_ratio)
+    random_indices = torch.randperm(len(_inference_dataset)).numpy()[:subset_size]
+    inference_dataset = Subset(_inference_dataset, random_indices)
+
+    # target_listのサブセットを作成
+    target_list = [_inference_dataset.target_list[i] for i in random_indices]
+
+    assert len(inference_dataset) == len(target_list)
 
     output_list = []
     for face_list, idx_list in tqdm(inference_dataset, total=len(inference_dataset)):
@@ -190,18 +209,18 @@ def main(
                 for i in range(len(pred_res)):
                     pred_res[i] = max(pred_list[i])
                 pred = pred_res.mean()
-                print(pred)
+
         except Exception as e:
             print(e)
             pred = 0.5
 
         output_list.append(pred)
 
-    # 顔が検出されなかった動画については0.5を追加
-    # output_list.extend([0.5 for _ in range(inference_dataset.num_no_face)])
-
-    auc = roc_auc_score(inference_dataset.target_list, output_list)
+    # AUCを計算.
+    auc = roc_auc_score(target_list, output_list)
     print(f"{dataset_name}| AUC: {auc:.4f}")
+
+    return {"auc": auc}
 
 
 if __name__ == "__main__":
@@ -228,11 +247,13 @@ if __name__ == "__main__":
         type=str,
         choices=["FFIW", "FF", "DFD", "DFDC", "DFDCP", "CDF"],
     )
+    parser.add_argument("-r", dest="subset_ratio", default=1.0, type=float)
     parser.add_argument("-n", dest="n_frames", default=32, type=int)
     args = parser.parse_args()
 
-    main(
+    evaluate_performance(
         weight_path=args.weight_path,
         model_name=args.model_name,
         dataset_name=args.dataset_name,
+        subset_ratio=args.subset_ratio,
     )
