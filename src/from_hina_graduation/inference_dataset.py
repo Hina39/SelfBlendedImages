@@ -2,6 +2,8 @@ import argparse
 import pathlib
 import random
 import warnings
+import glob
+import logging
 from typing import Dict, List, Literal, Tuple
 
 import numpy as np
@@ -96,7 +98,8 @@ class InferenceDataset(Dataset):
 
 
 def evaluate_performance(
-    weight_path: pathlib.Path,
+    # weight_path: pathlib.Path,
+    weight_dir_path: pathlib.Path,
     model_name: Literal["efficientnet_b4"],
     dataset_name: Literal["FFIW", "FF", "DFD", "DFDC", "DFDCP", "CDF"],
     subset_ratio: float = 1.0,
@@ -123,104 +126,114 @@ def evaluate_performance(
     """
     assert 0.0 <= subset_ratio <= 1.0
 
-    # DeepFake検出器（分類器）の重みを読み込む
-    # .tarで終わる場合はSelfBlendedImagesのコードで学習した重みを読み込む
-    if weight_path.suffix == ".tar":
-        model = Detector()
-        model = model.to(device)
-        cnn_sd = torch.load(weight_path)["model"]
-        model.load_state_dict(cnn_sd)
-    # .pthで終わる場合はClassifierクラスに重みを読み込む
-    elif weight_path.suffix == ".pth":
-        classifier_config_path = (
-            hina_graduation_config_path / "classifier" / f"{model_name}.yaml"
-        )
-        classifier_config = OmegaConf.load(classifier_config_path)
-        encoder_base = instantiate(classifier_config.encoder_base)
+    # 単純に特定のディレクトリの下をglobしてpth全部とってきて、ループ回して今回マージした関数呼ぶって.py書けば良い
+    # weight_dir_path = pathlib.Path("otamesi")
+    weight_paths = [pathlib.Path(path) for path in glob.glob(str(weight_dir_path / "checkpoints" / "*"))]
+    
+    for weight_path in weight_paths:
+        # DeepFake検出器（分類器）の重みを読み込む
+        # .tarで終わる場合はSelfBlendedImagesのコードで学習した重みを読み込む
+        if weight_path.suffix == ".tar":
+            model = Detector()
+            model = model.to(device)
+            cnn_sd = torch.load(weight_path)["model"]
+            model.load_state_dict(cnn_sd)
+        # .pthで終わる場合はClassifierクラスに重みを読み込む
+        elif weight_path.suffix == ".pth":
+            classifier_config_path = (
+                hina_graduation_config_path / "classifier" / f"{model_name}.yaml"
+            )
+            classifier_config = OmegaConf.load(classifier_config_path)
+            encoder_base = instantiate(classifier_config.encoder_base)
 
-        classifier = Classifier(
-            encoder_base=encoder_base,
-            head_config=classifier_config.head,
-            num_classes=2,
-            use_encoder_base_head=False,
-        )
-        classifier.load_state_dict(torch.load(weight_path))
-        model = classifier.to(device)
-    else:
-        raise NotImplementedError
+            classifier = Classifier(
+                encoder_base=encoder_base,
+                head_config=classifier_config.head,
+                num_classes=2,
+                use_encoder_base_head=False,
+            )
+            classifier.load_state_dict(torch.load(weight_path))
+            model = classifier.to(device)
+        else:
+            raise NotImplementedError
 
-    model.eval()
+        model.eval()
 
-    # 顔検出器をインスタンス化.
-    face_detector = get_model("resnet50_2020-07-20", max_size=2048, device=device)
-    face_detector.eval()
+        # 顔検出器をインスタンス化.
+        face_detector = get_model("resnet50_2020-07-20", max_size=2048, device=device)
+        face_detector.eval()
 
-    # データセットを初期化.
-    if dataset_name == "FFIW":
-        dataset_root_path = pathlib.Path("data/data/FFIW/inference")
-    elif dataset_name == "FF":
-        dataset_root_path = pathlib.Path("data/FaceForensics++/inference")
-    elif dataset_name == "DFD":
-        raise NotImplementedError
-    elif dataset_name == "DFDC":
-        raise NotImplementedError
-    elif dataset_name == "DFDCP":
-        raise NotImplementedError
-    elif dataset_name == "CDF":
-        dataset_root_path = pathlib.Path("data/Celeb-DF-v2/inference")
-    else:
-        NotImplementedError(f"dataset `{dataset_name}` is not supported.")
+        # データセットを初期化.
+        if dataset_name == "FFIW":
+            dataset_root_path = pathlib.Path("data/data/FFIW/inference")
+        elif dataset_name == "FF":
+            dataset_root_path = pathlib.Path("data/FaceForensics/inference")
+        elif dataset_name == "DFD":
+            raise NotImplementedError
+        elif dataset_name == "DFDC":
+            raise NotImplementedError
+        elif dataset_name == "DFDCP":
+            raise NotImplementedError
+        elif dataset_name == "CDF":
+            dataset_root_path = pathlib.Path("data/Celeb-DF-v2/inference")
+        else:
+            NotImplementedError(f"dataset `{dataset_name}` is not supported.")
 
-    _inference_dataset = InferenceDataset(dataset_root_path)
+        _inference_dataset = InferenceDataset(dataset_root_path)
 
-    # データセットのサブセットを生成
-    subset_size = int(len(_inference_dataset) * subset_ratio)
-    random_indices = torch.randperm(len(_inference_dataset)).numpy()[:subset_size]
-    inference_dataset = Subset(_inference_dataset, random_indices)
+        # データセットのサブセットを生成
+        subset_size = int(len(_inference_dataset) * subset_ratio)
+        random_indices = torch.randperm(len(_inference_dataset)).numpy()[:subset_size]
+        inference_dataset = Subset(_inference_dataset, random_indices)
 
-    # target_listのサブセットを作成
-    target_list = [_inference_dataset.target_list[i] for i in random_indices]
+        # target_listのサブセットを作成
+        target_list = [_inference_dataset.target_list[i] for i in random_indices]
 
-    assert len(inference_dataset) == len(target_list)
+        assert len(inference_dataset) == len(target_list)
 
-    output_list = []
-    for face_list, idx_list in tqdm(inference_dataset, total=len(inference_dataset)):
-        try:
-            with torch.no_grad():
-                img = torch.tensor(face_list).to(device).float() / 255
+        output_list = []
+        for face_list, idx_list in tqdm(inference_dataset, total=len(inference_dataset)):
+            try:
+                with torch.no_grad():
+                    img = torch.tensor(face_list).to(device).float() / 255
 
-                if model.__class__.__name__ == "Detector":
-                    # Detectorクラスではlogitsは[Real, Fake]の順です.
-                    pred = model(img).softmax(1)[:, 1]
-                elif model.__class__.__name__ == "Classifier":
-                    # Classifierクラスではlogitsは[Fake, Real]の順です.
-                    pred = model(img).logits.softmax(1)[:, 0]
-                else:
-                    raise NotImplementedError
+                    if model.__class__.__name__ == "Detector":
+                        # Detectorクラスではlogitsは[Real, Fake]の順です.
+                        pred = model(img).softmax(1)[:, 1]
+                    elif model.__class__.__name__ == "Classifier":
+                        # Classifierクラスではlogitsは[Fake, Real]の順です.
+                        pred = model(img).logits.softmax(1)[:, 0]
+                    else:
+                        raise NotImplementedError
 
-                pred_list = []
-                idx_img = -1
-                for i in range(len(pred)):
-                    if idx_list[i] != idx_img:
-                        pred_list.append([])
-                        idx_img = idx_list[i]
-                    pred_list[-1].append(pred[i].item())
-                pred_res = np.zeros(len(pred_list))
-                for i in range(len(pred_res)):
-                    pred_res[i] = max(pred_list[i])
-                pred = pred_res.mean()
+                    pred_list = []
+                    idx_img = -1
+                    for i in range(len(pred)):
+                        if idx_list[i] != idx_img:
+                            pred_list.append([])
+                            idx_img = idx_list[i]
+                        pred_list[-1].append(pred[i].item())
+                    pred_res = np.zeros(len(pred_list))
+                    for i in range(len(pred_res)):
+                        pred_res[i] = max(pred_list[i])
+                    pred = pred_res.mean()
 
-        except Exception as e:
-            print(e)
-            pred = 0.5
+            except Exception as e:
+                print(e)
+                pred = 0.5
 
-        output_list.append(pred)
+            output_list.append(pred)
 
-    # AUCを計算.
-    auc = roc_auc_score(target_list, output_list)
-    print(f"{dataset_name}| AUC: {auc:.4f}")
+        # AUCを計算.
+        auc = roc_auc_score(target_list, output_list)
+        print(f"{dataset_name}| AUC: {auc:.4f}")
+        # ロガーの設定
+        logging.basicConfig(filename=f"{weight_dir_path}/logfile.log", level=logging.INFO)
 
-    return {"auc": auc}
+        # ログメッセージの出力
+        logging.info(f"{dataset_name}|{weight_path}| AUC: {auc:.4f}")
+
+        # return {"auc": auc}
 
 
 if __name__ == "__main__":
@@ -233,7 +246,8 @@ if __name__ == "__main__":
     torch.backends.cudnn.benchmark = False
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("-w", dest="weight_path", type=pathlib.Path, required=True)
+    # parser.add_argument("-w", dest="weight_path", type=pathlib.Path, required=True)
+    parser.add_argument("-w", dest="weight_dir_path", type=pathlib.Path, required=True)
     parser.add_argument(
         "-m",
         dest="model_name",
@@ -252,7 +266,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     evaluate_performance(
-        weight_path=args.weight_path,
+        # weight_path=args.weight_path,
+        weight_dir_path=args.weight_dir_path,
         model_name=args.model_name,
         dataset_name=args.dataset_name,
         subset_ratio=args.subset_ratio,

@@ -7,5 +7,7 @@ data/*
 *.txt
 *.h5
 *.logs
+*.log
+*.ckpt
 
 
