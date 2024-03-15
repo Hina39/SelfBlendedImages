@@ -5,40 +5,38 @@
 `<通し番号>_<frame番号>.png`の形になっている. 同じフレーム内に顔が複数検出される
 ことがあるので通し番号をつけている.
 顔がすべてのフレームで検出されなかった場合はno_face.txtを保存する. 中身は空ファイル.
+ディレクトリ名の最後の数字は動画のラベル (REAL/FAKE) を表している.
 
 Celeb-DF-v2/
 │
 └── inference/
      │
-     ├── Celeb-synthesis_videos_id30_id3_0002/
+     ├── Celeb-synthesis_videos_id30_id3_0002_1/
      │    │
      │    ├── 0_0.png
      │    │
      │    ├── 1_10.png
      ...
-     └── target_list.json
 
 FaceForensics++
 │
 └── inference/
      │
-     ├── manipulated_sequences_NeuralTextures_c23_videos_995_233/
+     ├── manipulated_sequences_NeuralTextures_c23_videos_995_233_1/
      │    │
      │    ├── 0_0.png
      │    │
      │    ├── 1_9.png
      │    ...
      │
-     ├── manipulated_sequences_Deepfakes_c23_videos_024_073/
+     ├── manipulated_sequences_Deepfakes_c23_videos_024_073_1/
      │    │
      │    └── no_face.txt
      ...
-     └── target_list.json
 
 """
 
 import argparse
-import json
 import pathlib
 import random
 import warnings
@@ -110,19 +108,16 @@ def main(
     # `data/Celeb-DF-v2/Celeb-synthesis/videos/id30_id3_0002.mp4`
     dataset_root_path = pathlib.Path(*pathlib.Path(video_list[0]).parts[:2])
 
-    # target_listを保存する.
-    target_list_save_path = dataset_root_path / phase_name / "target_list.json"
-    target_list_save_path.parent.mkdir(exist_ok=True, parents=True)
-    with target_list_save_path.open("w") as f:
-        json.dump(target_list, f)
-
     error_video_paths = []
-    for filename in tqdm(video_list):
+    for filename, target in tqdm(zip(video_list, target_list), total=len(video_list)):
         # filenameからディレクトリ名を構成する.
         # 例. `manipulated_sequences_Deepfakes_c23_videos_000_003`
-        dir_name = str(
-            pathlib.Path(filename).relative_to(dataset_root_path).with_suffix("")
-        ).replace("/", "_")
+        dir_name = (
+            str(
+                pathlib.Path(filename).relative_to(dataset_root_path).with_suffix("")
+            ).replace("/", "_")
+            + f"_{target}"
+        )
 
         try:
             # 顔の検出を行う.
@@ -140,6 +135,11 @@ def main(
 
                 Image.fromarray(face.transpose(1, 2, 0), "RGB").save(save_path)
 
+                # 読み出して同じになるか確認
+                loaded_image = Image.open(save_path).convert("RGB")
+                loaded_image_np = np.array(loaded_image).transpose(2, 0, 1)
+                assert np.allclose(face, loaded_image_np)
+
         # 動画内で顔が検出されなかった場合.
         except Exception as e:
             print(e)
@@ -156,8 +156,8 @@ def main(
 
     print(f"{len(video_list)} videos are proecessed.")
     print(f"{len(error_video_paths)} videos are failed to detect face.")
-    print("f")
-    print(error_video_paths)
+    if len(error_video_paths):
+        print(error_video_paths)
 
 
 if __name__ == "__main__":
